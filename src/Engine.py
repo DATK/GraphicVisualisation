@@ -1,6 +1,7 @@
 import pygame as pg
 import sys
-
+import time
+import threading
 
 class GrpahicEngine:
     
@@ -78,8 +79,18 @@ class GrpahicEngine:
     def load_graphic(self,graphic):
         self.GRAPHICS.append(graphic)
 
+    def debug(self):
+        while self.runing:
+            print(f"SCALE: {self.SCALE}, STEP: {self.STEP},Graphics: {len(self.GRAPHICS)}, Optimized: {self.optimisation}")
+            time.sleep(0.2)
+
+    def cords_updates(self):
+        while self.runing:
+            for graphic in self.GRAPHICS:
+                graphic.generate_cords()
+            pg.time.delay(5000)
+
     def draw_graphic(self,graphic,res :tuple):
-        graphic.generate_cords()
         if not graphic.mouse_drawing:
             normalcords=[]
 
@@ -102,8 +113,19 @@ class GrpahicEngine:
     def addButton(self,button):
         self.BUTTONS.append(button)
              
-    def run(self):
-        while True:
+    def run(self,debug=False):
+
+        self.runing=True
+
+        debugthread=threading.Thread(target=self.debug)
+        crdUpdateThread=threading.Thread(target=self.cords_updates,daemon=True)
+
+        if debug:
+            debugthread.start()
+
+        crdUpdateThread.start()
+
+        while self.runing:
             self.display.fill((200,200,200))
             self.display.blit(self.Graph_Widnow,(self.RESOLUTION[0]*self.GRAPH_WINDOW_KOEFS[0],self.RESOLUTION[1]*self.GRAPH_WINDOW_KOEFS[1]))
             self.Graph_Widnow.fill((255,255,255))
@@ -127,12 +149,12 @@ class GrpahicEngine:
             
             points_x,points_y=self.numbers_gen(WindowSizeX,WindowSizeY)                
             for point in points_x:
-                text=self.Font.render(str(point/self.SCALE),True,(0,0,0))
+                text=self.Font.render(str(round(point/self.SCALE,3)),True,(0,0,0))
                 self.Graph_Widnow.blit(text,self.normalize_cords(point,text.get_height()+1))
                 pg.draw.line(self.Graph_Widnow,(0,0,0),self.normalize_cords(point,self.START_FROM[1]),self.normalize_cords(point,WindowSizeY))
                 
             for point in points_y:
-                text=self.Font.render(str(point/self.SCALE),True,(0,0,0))
+                text=self.Font.render(str(round(point/self.SCALE,3)),True,(0,0,0))
                 self.Graph_Widnow.blit(text,self.normalize_cords(0,point))
                 pg.draw.line(self.Graph_Widnow,(0,0,0),self.normalize_cords(self.START_FROM[0],point+1),self.normalize_cords(WindowSizeX,point+1))
             
@@ -147,13 +169,31 @@ class GrpahicEngine:
             
             for event in pg.event.get():
                 if event.type==pg.QUIT:
-                    sys.exit()
+                    self.runing=False
+                    
                 for graphic in self.GRAPHICS:
                     if graphic.mouse_drawing:
                         graphic.mouseFuncDrawing(event,self.rc,self.normalise_mousepos(pg.mouse.get_pos()))
                 for button in self.BUTTONS:
                     button.do_func(event)
+                
+                if event.type==pg.KEYDOWN and pg.key.get_pressed[pg.K_o]:
+                    self.optimisation=not self.optimisation
+
+
+                if event.type==pg.MOUSEWHEEL:
+                    if event.y==1:
+                        self.SCALE+=2
+                    elif event.y==-1:
+                        if self.SCALE<3:
+                            continue
+                        self.SCALE-=2
+        
             self.fpsnow=self.Clock.get_fps()
             self.rc=pg.Rect(self.RESOLUTION[0]*self.GRAPH_WINDOW_KOEFS[0],self.RESOLUTION[1]*self.GRAPH_WINDOW_KOEFS[1],self.RESOLUTION[0]*self.GRAPH_WINDOW_KOEFS[2],self.RESOLUTION[1]*self.GRAPH_WINDOW_KOEFS[3])
             pg.display.flip()
             self.Clock.tick(self.FRAMERATE)
+
+        if debug: debugthread.join()
+        crdUpdateThread.join()
+        sys.exit()
